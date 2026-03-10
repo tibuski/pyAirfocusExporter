@@ -62,7 +62,7 @@ pyairfocusexporter export \
 ```python
 # Airfocus API Configuration
 AIRFOCUS_API_KEY = "your_airfocus_api_key_here"
-AIRFOCUS_API_BASE_URL = "https://api.airfocus.com/api/v0"
+AIRFOCUS_API_BASE_URL = "https://app.airfocus.com"
 
 # Miro Configuration
 MIRO_ACCESS_TOKEN = "your_miro_access_token_here"

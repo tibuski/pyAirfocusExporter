@@ -11,7 +11,7 @@ class AirfocusFetcher:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://api.airfocus.com/api/v0",
+        base_url: str = "https://app.airfocus.com",
         rate_limiter: Optional[HeaderBasedRateLimiter] = None,
         ignore_ssl: bool = False,
     ):
@@ -67,7 +67,7 @@ class AirfocusFetcher:
         if max_depth is not None and depth > max_depth:
             return WorkspaceData(id=workspace_id, name="", items=[])
 
-        response = self._request("GET", f"/workspaces/{workspace_id}")
+        response = self._request("GET", f"/api/workspaces/{workspace_id}")
         response.raise_for_status()
         data = response.json()
 
