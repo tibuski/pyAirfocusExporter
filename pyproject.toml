@@ -11,6 +11,7 @@ dependencies = [
     "rich>=13.0.0",
     "tenacity>=8.2.0",
     "loguru>=0.7.0",
+    "miro-api>=1.0.0",
 ]
 
 [project.optional-dependencies]

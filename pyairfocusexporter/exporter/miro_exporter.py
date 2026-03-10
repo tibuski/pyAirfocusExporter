@@ -1,12 +1,12 @@
 import time
 from typing import Any, Optional
-import httpx
+import miro_api
+from miro_api import models
 
 from ..models.workspace import WorkspaceData
 from ..models.item import ItemData
 from ..models.export import ExportResult, ExportError
 from .base_exporter import BaseExporter
-from ..utils.rate_limiter import HeaderBasedRateLimiter
 from ..utils.logging import get_logger
 
 logger = get_logger()
@@ -17,31 +17,18 @@ class MiroExporter(BaseExporter):
         self,
         access_token: str,
         board_id: Optional[str] = None,
-        base_url: str = "https://api.miro.com/v2",
-        ignore_ssl: bool = False,
     ):
         self.access_token = access_token
         self.board_id = board_id
-        self.base_url = base_url.rstrip("/")
-        self._client: Optional[httpx.Client] = None
-        self._ignore_ssl = ignore_ssl
+        self._api: Optional[miro_api.MiroApi] = None
         self.item_cache: dict[str, str] = {}
-        self.rate_limiter = HeaderBasedRateLimiter(requests_per_minute=100, window_seconds=60)
 
     def __enter__(self) -> "MiroExporter":
-        self._client = httpx.Client(
-            headers={
-                "Authorization": f"Bearer {self.access_token}",
-                "Content-Type": "application/json",
-            },
-            verify=not self._ignore_ssl,
-            timeout=30.0,
-        )
+        self._api = miro_api.MiroApi(self.access_token)
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        if self._client:
-            self._client.close()
+        pass
 
     def validate_config(self) -> bool:
         if not self.access_token:
@@ -64,21 +51,25 @@ class MiroExporter(BaseExporter):
                 duration=time.time() - start_time,
             )
 
+        if not self._api:
+            return ExportResult(
+                success=False,
+                error_count=1,
+                errors=[ExportError(message="API client not initialized")],
+                duration=time.time() - start_time,
+            )
+
         try:
-            # Get all items grouped by workspace
             workspace_items = self._group_items_by_workspace(workspace_data)
 
             position_x = 0
             position_y = 0
 
-            # Export each workspace's items with a header
             for ws_name, items in workspace_items:
-                # Create workspace header (sticky note)
                 logger.info(f"Exporting workspace: {ws_name} ({len(items)} items)")
-                self._create_sticky_note(ws_name, position_x, position_y, "#ffcc00")
-                position_y += 150
+                self._create_sticky_note(ws_name, position_x, position_y)
+                position_y += 250
 
-                # Export items in grid layout
                 ws_position_x = position_x
                 ws_position_y = position_y
 
@@ -94,12 +85,9 @@ class MiroExporter(BaseExporter):
                     except Exception as e:
                         errors.append(ExportError(message=f"Card creation failed: {e}"))
 
-                # Update position for next workspace
-                items_in_row = (ws_position_y - position_y) // 200 + 1
                 position_y = ws_position_y + 200
                 position_x = max(position_x, ws_position_x + 300)
 
-            # Create connectors for parent-child relationships
             all_items = self._flatten_items(workspace_data)
             for item in all_items:
                 if item.parent_id and item.parent_id in self.item_cache:
@@ -126,14 +114,11 @@ class MiroExporter(BaseExporter):
     def _group_items_by_workspace(
         self, workspace: WorkspaceData
     ) -> list[tuple[str, list[ItemData]]]:
-        """Returns list of (workspace_name, items) tuples"""
         result = []
 
-        # Add root workspace items
         if workspace.items:
             result.append((workspace.name, list(workspace.items)))
 
-        # Add child workspace items
         for child in workspace.child_workspaces:
             result.extend(self._group_items_by_workspace(child))
 
@@ -145,62 +130,38 @@ class MiroExporter(BaseExporter):
             items.extend(self._flatten_items(child))
         return items
 
-    def _create_sticky_note(self, text: str, x: float, y: float, color: str = "#ffcc00") -> str:
-        self.rate_limiter.acquire()
-
-        if not self._client:
-            raise RuntimeError("Client not initialized")
-
-        response = self._client.post(
-            f"{self.base_url}/boards/{self.board_id}/sticky_notes",
-            json={
-                "data": {
-                    "content": text,
-                    "shape": "square",
-                },
-                "position": {"x": x, "y": y},
-                "style": {
-                    "fillColor": color,
-                },
-            },
+    def _create_sticky_note(self, text: str, x: float, y: float) -> str:
+        sticky_note_data = models.StickyNoteData(
+            content=text,
+            shape="square",
         )
-        response.raise_for_status()
-        data = response.json()
-        return data.get("id", "")
+        sticky_note = models.StickyNoteCreateRequest(
+            data=sticky_note_data,
+            position=models.PositionChange(x=x, y=y),
+        )
+        result = self._api.create_sticky_note_item(self.board_id, sticky_note)
+        logger.debug(f"Created sticky note: {text}")
+        return result.id
 
     def _create_card(self, item: ItemData, x: float, y: float) -> str:
-        self.rate_limiter.acquire()
-
-        if not self._client:
-            raise RuntimeError("Client not initialized")
-
-        response = self._client.post(
-            f"{self.base_url}/boards/{self.board_id}/cards",
-            json={
-                "data": {
-                    "title": item.title,
-                },
-                "position": {"x": x, "y": y},
-            },
+        card_data = models.CardData(
+            title=item.title,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data.get("id", "")
+        card = models.CardCreateRequest(
+            data=card_data,
+            position=models.PositionChange(x=x, y=y),
+        )
+        result = self._api.create_card_item(self.board_id, card)
+        logger.debug(f"Created card: {item.title}")
+        return result.id
 
     def _create_connector(self, start_id: str, end_id: str) -> None:
-        self.rate_limiter.acquire()
-
-        if not self._client:
-            raise RuntimeError("Client not initialized")
-
-        response = self._client.post(
-            f"{self.base_url}/boards/{self.board_id}/connectors",
-            json={
-                "startItem": {"id": start_id},
-                "endItem": {"id": end_id},
-            },
+        connector_data = models.ConnectorCreationData(
+            start_item=models.Reference(id=start_id),
+            end_item=models.Reference(id=end_id),
         )
-        response.raise_for_status()
+        self._api.create_connector(self.board_id, connector_data)
+        logger.debug(f"Created connector: {start_id} -> {end_id}")
 
     def cleanup(self) -> None:
         self.item_cache.clear()
