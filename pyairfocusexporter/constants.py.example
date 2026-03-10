@@ -6,7 +6,13 @@ AIRFOCUS_API_BASE_URL = "https://app.airfocus.com"
 AIRFOCUS_WORKSPACE_ID = "your_workspace_id_here"
 
 # Miro Configuration
+# Option 1: Use access token directly
 MIRO_ACCESS_TOKEN = "your_miro_access_token_here"
+
+# Option 2: Use OAuth credentials (see README for setup)
+# MIRO_CLIENT_ID = "your_client_id"
+# MIRO_CLIENT_SECRET = "your_client_secret"
+
 MIRO_API_BASE_URL = "https://api.miro.com/v2"
 
 # Rate Limiting Configuration
