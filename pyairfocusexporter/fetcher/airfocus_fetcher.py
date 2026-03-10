@@ -84,6 +84,16 @@ class AirfocusFetcher:
             items_page = data.get("data", [])
             count = len(items_page)
             logger.info(f"Fetched {count} items from workspace {workspace_id}")
+
+            for item_data in items_page:
+                item_id = item_data.get("id", "unknown")
+                item_name = item_data.get("name", "Untitled")
+                item_type = item_data.get("typeId", "unknown")
+                parent_id = item_data.get("parentId")
+                logger.debug(
+                    f"  Item: {item_name} (id={item_id}, type={item_type}, parent={parent_id})"
+                )
+
             items.extend(items_page)
 
             if len(items_page) < limit:
