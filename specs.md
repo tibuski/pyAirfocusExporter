@@ -4,14 +4,16 @@
 `pyAirfocusExporter` is a modular Python tool designed to extract data from airfocus workspaces and export them to various external services. The architecture is decoupled to allow adding new export destinations (e.g., Miro, Notion, Trello) without modifying the core extraction logic. The tool extracts root workspace information and recursively traverses all child workspaces. Users must provide the top-level workspace ID.
 
 ## 2. Technical Stack
-- **Language:** Python 3.12+
+- **Language:** Python 3.9+
 - **Dependency Management:** `uv` (Python-only setup, no Docker)
 - **Core Libraries:**
-  - `httpx` (synchronous HTTP client)
+  - `httpx` (synchronous HTTP client for airfocus API)
   - `pydantic` (data validation and serialization)
   - `click` (CLI framework with automatic help display)
   - `rich` (colored output, progress bars, and formatting)
   - `tenacity` (retry logic with exponential backoff)
+  - `miro-api` (official Miro Python client for Miro exports)
+  - `loguru` (logging with levels: DEBUG, INFO, WARNING, ERROR)
 - **Development:**
   - `pytest` (minimal testing strategy, ~70% coverage)
   - `black`, `ruff` (code formatting and linting)

@@ -3,13 +3,14 @@ name = "pyairfocusexporter"
 version = "0.1.0"
 description = "Export airfocus workspaces to external services"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = [
     "httpx>=0.26.0",
     "pydantic>=2.5.0",
     "click>=8.1.0",
     "rich>=13.0.0",
     "tenacity>=8.2.0",
+    "loguru>=0.7.0",
 ]
 
 [project.optional-dependencies]

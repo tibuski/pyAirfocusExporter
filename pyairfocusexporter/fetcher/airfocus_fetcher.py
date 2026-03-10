@@ -5,6 +5,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from ..models.workspace import WorkspaceData
 from ..models.item import ItemData
 from ..utils.rate_limiter import HeaderBasedRateLimiter
+from ..utils.logging import get_logger
+
+logger = get_logger()
 
 
 class AirfocusFetcher:
@@ -22,6 +25,7 @@ class AirfocusFetcher:
         self._ignore_ssl = ignore_ssl
 
     def __enter__(self) -> "AirfocusFetcher":
+        logger.debug("Initializing AirfocusFetcher")
         self._client = httpx.Client(
             headers={
                 "Authorization": f"Bearer {self.api_key}",
@@ -35,6 +39,7 @@ class AirfocusFetcher:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if self._client:
             self._client.close()
+        logger.debug("AirfocusFetcher closed")
 
     def _request(
         self,
@@ -47,7 +52,9 @@ class AirfocusFetcher:
         if not self._client:
             raise RuntimeError("Client not initialized. Use context manager.")
 
+        logger.debug(f"Request: {method} {self.base_url}{path}")
         response = self._client.request(method, f"{self.base_url}{path}", **kwargs)
+
         remaining = response.headers.get("X-RateLimit-Remaining")
         reset = response.headers.get("X-RateLimit-Reset")
         if reset:
@@ -55,6 +62,8 @@ class AirfocusFetcher:
         else:
             reset_float = None
         self.rate_limiter.update_from_headers(int(remaining) if remaining else None, reset_float)
+
+        logger.debug(f"Response status: {response.status_code}")
         return response
 
     def _fetch_items(self, workspace_id: str) -> list[dict[str, Any]]:
@@ -73,12 +82,15 @@ class AirfocusFetcher:
             data = response.json()
 
             items_page = data.get("data", [])
+            count = len(items_page)
+            logger.info(f"Fetched {count} items from workspace {workspace_id}")
             items.extend(items_page)
 
             if len(items_page) < limit:
                 break
             offset += limit
 
+        logger.info(f"Total items fetched: {len(items)}")
         return items
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
@@ -91,6 +103,7 @@ class AirfocusFetcher:
         if max_depth is not None and depth > max_depth:
             return WorkspaceData(id=workspace_id, name="", items=[])
 
+        logger.info(f"Fetching workspace: {workspace_id} (depth: {depth})")
         response = self._request("GET", f"/api/workspaces/{workspace_id}")
         response.raise_for_status()
         data = response.json()
@@ -102,12 +115,15 @@ class AirfocusFetcher:
             metadata=data.get("metadata", {}),
         )
 
+        logger.info(f"Workspace name: {workspace.name}")
+
         items_data = self._fetch_items(workspace_id)
         for item_data in items_data:
             workspace.items.append(self._parse_item(item_data))
 
         if max_depth is None or depth < max_depth:
             child_workspaces = data.get("_embedded", {}).get("children", [])
+            logger.info(f"Found {len(child_workspaces)} child workspaces")
             for child_data in child_workspaces:
                 child_id = child_data.get("id")
                 if child_id:

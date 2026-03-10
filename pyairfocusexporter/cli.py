@@ -6,8 +6,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from .fetcher.airfocus_fetcher import AirfocusFetcher
 from .exporter.miro_exporter import MiroExporter
 from . import constants
+from .utils.logging import setup_logging, get_logger
 
 console = Console()
+logger = get_logger()
 
 
 @click.group(invoke_without_command=True)
@@ -60,7 +62,7 @@ def cli(ctx: click.Context) -> None:
     "--verbose",
     "-v",
     count=True,
-    help="Increase verbosity",
+    help="Increase verbosity (-v for INFO, -vv for DEBUG)",
 )
 def export(
     workspace_id: Optional[str],
@@ -73,19 +75,31 @@ def export(
     verbose: int,
 ) -> None:
     """Export workspace to target service."""
+    setup_logging()
+
+    if verbose >= 2:
+        from . import constants as const
+
+        const.LOG_LEVEL = "DEBUG"
+        setup_logging()
+
+    logger.info("Starting export")
+    logger.info(f"Target: {target}, Dry run: {dry_run}, Ignore SSL: {ignore_ssl}")
+
     workspace_id = workspace_id or constants.AIRFOCUS_WORKSPACE_ID
     if not workspace_id:
+        logger.error("WORKSPACE_ID not configured")
         console.print("[red]Error: WORKSPACE_ID not configured[/red]")
         console.print(
             "[yellow]Please set --workspace-id or configure AIRFOCUS_WORKSPACE_ID in constants.py[/yellow]"
         )
         raise click.Abort()
 
-    if verbose > 0:
-        console.print(f"[dim]Starting export for workspace: {workspace_id}[/dim]")
+    logger.info(f"Workspace ID: {workspace_id}")
 
     api_key = constants.AIRFOCUS_API_KEY
     if not api_key:
+        logger.error("AIRFOCUS_API_KEY not configured")
         console.print("[red]Error: AIRFOCUS_API_KEY not configured[/red]")
         console.print(
             "[yellow]Please copy constants.py.example to constants.py and configure your API keys[/yellow]"
@@ -95,16 +109,18 @@ def export(
     access_token = None
     board_id = None
 
-    if target.lower() == "miro":
+    if target.lower() == "miro" and not dry_run:
         access_token = constants.MIRO_ACCESS_TOKEN
         if not access_token:
+            logger.error("MIRO_ACCESS_TOKEN not configured")
             console.print("[red]Error: MIRO_ACCESS_TOKEN not configured[/red]")
             console.print(
                 "[yellow]Please copy constants.py.example to constants.py and configure your API keys[/yellow]"
             )
             raise click.Abort()
         board_id = miro_board_id
-        if not board_id and not dry_run:
+        if not board_id:
+            logger.error("--miro-board-id is required for miro target")
             console.print("[red]Error: --miro-board-id is required for miro target[/red]")
             raise click.Abort()
 
@@ -130,6 +146,7 @@ def export(
             console.print(f"[green]Total items: {total_items}[/green]")
 
             if dry_run:
+                logger.warning("Dry run mode - skipping export")
                 console.print("[yellow]Dry run mode - skipping export[/yellow]")
                 return
 
@@ -137,7 +154,6 @@ def export(
                 with MiroExporter(
                     access_token=access_token,
                     board_id=board_id,
-                    ignore_ssl=ignore_ssl,
                 ) as exporter:
                     with Progress(
                         SpinnerColumn(),
@@ -149,18 +165,22 @@ def export(
                         progress.update(task, completed=True)
 
                     if result.success:
+                        logger.info(f"Export successful! Exported {result.exported_count} items")
                         console.print(
                             f"[green]Export successful! Exported {result.exported_count} items[/green]"
                         )
                     else:
+                        logger.error(f"Export completed with {result.error_count} errors")
                         console.print(
                             f"[red]Export completed with {result.error_count} errors[/red]"
                         )
                         for error in result.errors:
                             console.print(f"[red]  - {error.message}[/red]")
                     for warning in result.warnings:
+                        logger.warning(warning)
                         console.print(f"[yellow]  Warning: {warning}[/yellow]")
     except Exception as e:
+        logger.error(f"Error: {e}")
         console.print(f"[red]Error: {e}[/red]")
         if verbose > 0:
             import traceback
