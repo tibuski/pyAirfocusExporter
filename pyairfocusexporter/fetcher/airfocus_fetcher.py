@@ -81,7 +81,7 @@ class AirfocusFetcher:
             response.raise_for_status()
             data = response.json()
 
-            items_page = data.get("data", [])
+            items_page = data.get("items", [])
             count = len(items_page)
             logger.info(f"Fetched {count} items from workspace {workspace_id}")
 
@@ -135,8 +135,11 @@ class AirfocusFetcher:
             child_workspaces = data.get("_embedded", {}).get("children", [])
             logger.info(f"Found {len(child_workspaces)} child workspaces")
             for child_data in child_workspaces:
-                child_id = child_data.get("id")
+                child_id = child_data.get("workspaceId")
+                if not child_id and child_data.get("workspace"):
+                    child_id = child_data["workspace"].get("id")
                 if child_id:
+                    logger.debug(f"Fetching child workspace: {child_id}")
                     child_workspace = self.fetch_workspace(
                         child_id, depth=depth + 1, max_depth=max_depth
                     )
