@@ -311,23 +311,14 @@ uv run python -m pyairfocusexporter export --help
 4. Update CLI help text and validation
 
 ### Planned Exporters:
-- **NotionExporter**: Export to Notion databases
-- **TrelloExporter**: Export to Trello boards
 - **CSVExporter**: Export to CSV files for analysis
 - **JSONExporter**: Export to JSON format for backup
-
-### API Evolution:
-- Monitor airfocus API changes via OpenAPI schema
-- Version detection and compatibility layers
-- Deprecation warnings for soon-to-break features
 
 ## 13. Documentation Requirements
 
 ### User Documentation:
 - `README.md`: Quick start guide and basic usage
-- `CONFIGURATION.md`: Detailed configuration instructions
-- `EXAMPLES.md`: Example workflows and use cases
-- `TROUBLESHOOTING.md`: Common issues and solutions
+- `constants.py.example`: Detailed configuration instructions
 
 ### Developer Documentation:
 - Code comments following Google style guide
@@ -356,23 +347,6 @@ uv run python -m pyairfocusexporter export --help
 - Validate workspace access before processing
 - Check exporter permissions before operations
 - Graceful handling of permission errors
-
-## 15. Deployment and Distribution
-
-### Distribution Options:
-- PyPI package: `pip install pyairfocusexporter`
-- Standalone executable with PyInstaller
-- Docker image (optional, not primary)
-
-### CI/CD Pipeline:
-- Automated testing on push/PR
-- Version bump and changelog generation
-- PyPI deployment on tag creation
-
-### Monitoring:
-- Health check endpoints
-- Performance metrics collection
-- Error tracking integration
 
 ---
 
