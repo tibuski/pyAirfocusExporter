@@ -118,7 +118,7 @@ def export(
                 "[yellow]Please copy constants.py.example to constants.py and configure your API keys[/yellow]"
             )
             raise click.Abort()
-        board_id = miro_board_id
+        board_id = miro_board_id or constants.MIRO_BOARD_ID
         if not board_id:
             logger.error("--miro-board-id is required for miro target")
             console.print("[red]Error: --miro-board-id is required for miro target[/red]")

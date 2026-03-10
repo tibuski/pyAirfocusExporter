@@ -6,6 +6,8 @@ AIRFOCUS_API_BASE_URL = "https://app.airfocus.com"
 AIRFOCUS_WORKSPACE_ID = "your_workspace_id_here"
 
 # Miro Configuration
+MIRO_BOARD_ID = "your_miro_board_id_here"
+
 # Option 1: Use access token directly
 MIRO_ACCESS_TOKEN = "your_miro_access_token_here"
 

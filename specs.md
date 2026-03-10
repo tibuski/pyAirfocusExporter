@@ -122,7 +122,8 @@ class AirfocusFetcher:
 
 ### Core Features:
 - **Miro v2 API Integration**: Use httpx with proper authentication
-- **Board Items**: Create Miro Cards for each airfocus item with proper formatting
+- **Board Items**: Create Miro Cards with title only (no description)
+- **Workspace Headers**: Use sticky notes to label each workspace section
 - **Connectors**: Create Miro Connectors to represent parent/child links with `startItem` and `endItem` fields
 - **Style Mapping**: Map airfocus link types to Miro connector shapes (straight, elbowed, curved)
 - **Pagination**: Implement cursor-based pagination for large boards

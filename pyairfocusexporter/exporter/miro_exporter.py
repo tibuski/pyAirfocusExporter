@@ -7,6 +7,9 @@ from ..models.item import ItemData
 from ..models.export import ExportResult, ExportError
 from .base_exporter import BaseExporter
 from ..utils.rate_limiter import HeaderBasedRateLimiter
+from ..utils.logging import get_logger
+
+logger = get_logger()
 
 
 class MiroExporter(BaseExporter):
@@ -62,22 +65,42 @@ class MiroExporter(BaseExporter):
             )
 
         try:
-            all_items = self._flatten_items(workspace_data)
+            # Get all items grouped by workspace
+            workspace_items = self._group_items_by_workspace(workspace_data)
+
             position_x = 0
             position_y = 0
 
-            for item in all_items:
-                try:
-                    miro_item_id = self._create_card(item, position_x, position_y)
-                    self.item_cache[item.id] = miro_item_id
-                    exported_count += 1
-                    position_x += 300
-                    if position_x > 3000:
-                        position_x = 0
-                        position_y += 200
-                except Exception as e:
-                    errors.append(ExportError(message=str(e)))
+            # Export each workspace's items with a header
+            for ws_name, items in workspace_items:
+                # Create workspace header (sticky note)
+                logger.info(f"Exporting workspace: {ws_name} ({len(items)} items)")
+                self._create_sticky_note(ws_name, position_x, position_y, "#ffcc00")
+                position_y += 150
 
+                # Export items in grid layout
+                ws_position_x = position_x
+                ws_position_y = position_y
+
+                for item in items:
+                    try:
+                        miro_item_id = self._create_card(item, ws_position_x, ws_position_y)
+                        self.item_cache[item.id] = miro_item_id
+                        exported_count += 1
+                        ws_position_x += 300
+                        if ws_position_x > 3000:
+                            ws_position_x = ws_position_x - 3000 + position_x
+                            ws_position_y += 200
+                    except Exception as e:
+                        errors.append(ExportError(message=f"Card creation failed: {e}"))
+
+                # Update position for next workspace
+                items_in_row = (ws_position_y - position_y) // 200 + 1
+                position_y = ws_position_y + 200
+                position_x = max(position_x, ws_position_x + 300)
+
+            # Create connectors for parent-child relationships
+            all_items = self._flatten_items(workspace_data)
             for item in all_items:
                 if item.parent_id and item.parent_id in self.item_cache:
                     parent_miro_id = self.item_cache.get(item.parent_id)
@@ -100,11 +123,50 @@ class MiroExporter(BaseExporter):
             duration=time.time() - start_time,
         )
 
+    def _group_items_by_workspace(
+        self, workspace: WorkspaceData
+    ) -> list[tuple[str, list[ItemData]]]:
+        """Returns list of (workspace_name, items) tuples"""
+        result = []
+
+        # Add root workspace items
+        if workspace.items:
+            result.append((workspace.name, list(workspace.items)))
+
+        # Add child workspace items
+        for child in workspace.child_workspaces:
+            result.extend(self._group_items_by_workspace(child))
+
+        return result
+
     def _flatten_items(self, workspace: WorkspaceData) -> list[ItemData]:
         items = list(workspace.items)
         for child in workspace.child_workspaces:
             items.extend(self._flatten_items(child))
         return items
+
+    def _create_sticky_note(self, text: str, x: float, y: float, color: str = "#ffcc00") -> str:
+        self.rate_limiter.acquire()
+
+        if not self._client:
+            raise RuntimeError("Client not initialized")
+
+        response = self._client.post(
+            f"{self.base_url}/boards/{self.board_id}/sticky_notes",
+            json={
+                "data": {
+                    "content": text,
+                    "shape": "square",
+                },
+                "position": {"x": x, "y": y},
+                "style": {
+                    "fillColor": color,
+                },
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("id", "")
 
     def _create_card(self, item: ItemData, x: float, y: float) -> str:
         self.rate_limiter.acquire()
@@ -117,7 +179,6 @@ class MiroExporter(BaseExporter):
             json={
                 "data": {
                     "title": item.title,
-                    "description": item.description or "",
                 },
                 "position": {"x": x, "y": y},
             },
