@@ -7,13 +7,11 @@
 - **Language:** Python 3.12+
 - **Dependency Management:** `uv` (Python-only setup, no Docker)
 - **Core Libraries:**
-  - `httpx` (async HTTP client with HTTP/2 support)
+  - `httpx` (synchronous HTTP client)
   - `pydantic` (data validation and serialization)
   - `click` (CLI framework with automatic help display)
   - `rich` (colored output, progress bars, and formatting)
   - `tenacity` (retry logic with exponential backoff)
-  - `circuitbreaker` (resilience pattern)
-  - `miro-python-sdk` (official Miro v2 API client)
 - **Development:**
   - `pytest` (minimal testing strategy, ~70% coverage)
   - `black`, `ruff` (code formatting and linting)
@@ -23,24 +21,24 @@
 The CLI uses Click for intuitive command-line interface with automatic help display:
 
 ```bash
-python -m pyairfocusexporter export \
+pyairfocusexporter export \
   --workspace-id <ID> \
   --target miro \
+  --miro-board-id <BOARD_ID> \
   [--dry-run] \
   [--ignore-ssl] \
   [--stop-on-error] \
-  [--max-depth <N>] \
-  [--config <path>]
+  [--max-depth <N>]
 ```
 
 ### Command-line Arguments:
 - `--workspace-id` (required): The ID of the airfocus workspace to extract
 - `--target` (required): Destination service (initially only `miro` is supported)
+- `--miro-board-id` (required for miro): Miro board ID to export to
 - `--dry-run`: Fetch data without pushing to the target service
 - `--ignore-ssl`: Ignore SSL certificate verification (for development/testing)
 - `--stop-on-error`: Halt execution on first error encountered
 - `--max-depth`: Maximum recursion depth for child workspaces (default: unlimited)
-- `--config`: Path to configuration file (default: `constants.py`)
 
 ### CLI Features:
 - Automatic help display with `--help`
@@ -82,13 +80,12 @@ MAX_RETRIES = 3                     # maximum retry attempts
 RETRY_DELAY = 1.0                   # initial retry delay in seconds
 ```
 
-## 5. Architecture: The Fetcher (Async/await)
+## 5. Architecture: The Fetcher
 
 ### Core Features:
-- **Async/Await Architecture**: Full asynchronous implementation for performance
+- **Synchronous Architecture**: Simple and straightforward implementation
 - **Recursive Child Workspace Traversal**: Extract all levels of child workspaces
 - **Rate Limiting**: Respect airfocus limit of **600 requests/minute** with token bucket algorithm
-- **Circuit Breaker Pattern**: Automatic fallback and recovery for API failures
 - **Request Tracking**: Log `X-Request-Id` for every response to facilitate bug reporting
 - **Data Enrichment**: Retrieve items and hierarchical relationships via `_embedded` field
 - **Markdown Formatting**: Use `Accept: application/vnd.airfocus.markdown+json` header
@@ -101,13 +98,12 @@ class AirfocusFetcher:
         self.api_key = api_key
         self.base_url = base_url
         self.rate_limiter = rate_limiter
-        self.circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
     
-    async def fetch_workspace(self, workspace_id: str, depth: int = None) -> WorkspaceData:
+    def fetch_workspace(self, workspace_id: str, depth: int = None) -> WorkspaceData:
         """Recursively fetch workspace and all child workspaces"""
         pass
     
-    async def fetch_child_workspaces(self, parent_id: str, current_depth: int, max_depth: int) -> List[WorkspaceData]:
+    def fetch_child_workspaces(self, parent_id: str, current_depth: int, max_depth: int) -> List[WorkspaceData]:
         """Recursively fetch child workspaces up to max_depth"""
         pass
 ```
@@ -116,12 +112,11 @@ class AirfocusFetcher:
 - Token bucket algorithm with 600 tokens/minute
 - Monitor `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers
 - Automatic backoff when approaching limits
-- Queue-based request scheduling
 
 ## 6. Architecture: The Exporter (Miro v2)
 
 ### Core Features:
-- **Miro v2 API Integration**: Use official `miro-python-sdk` with proper authentication
+- **Miro v2 API Integration**: Use httpx with proper authentication
 - **Board Items**: Create Miro Cards for each airfocus item with proper formatting
 - **Connectors**: Create Miro Connectors to represent parent/child links with `startItem` and `endItem` fields
 - **Style Mapping**: Map airfocus link types to Miro connector shapes (straight, elbowed, curved)
@@ -136,11 +131,11 @@ class MiroExporter(BaseExporter):
         self.board_id = board_id
         self.item_cache = {}  # Cache for created items
     
-    async def export(self, workspace_data: WorkspaceData) -> ExportResult:
+    def export(self, workspace_data: WorkspaceData) -> ExportResult:
         """Export workspace data to Miro board"""
         pass
     
-    async def create_connectors(self, items: List[ItemData], parent_map: Dict[str, List[str]]):
+    def create_connectors(self, items: List[ItemData], parent_map: Dict[str, List[str]]):
         """Create connectors between parent and child items"""
         pass
 ```
@@ -194,9 +189,8 @@ pyAirfocusExporter/
 │   │   └── export.py
 │   ├── fetcher/
 │   │   ├── __init__.py
-│   │   ├── airfocus_fetcher.py   # Async fetcher
+│   │   ├── airfocus_fetcher.py   # HTTP fetcher
 │   │   ├── rate_limiter.py       # Rate limiting logic
-│   │   ├── circuit_breaker.py    # Resilience pattern
 │   │   └── cache.py              # Request caching
 │   ├── exporter/
 │   │   ├── __init__.py
@@ -236,11 +230,11 @@ cd pyAirfocusExporter
 uv sync
 
 # Copy configuration template
-cp constants.py.example constants.py
+cp pyairfocusexporter/constants.py.example pyairfocusexporter/constants.py
 # Edit constants.py with your API keys
 
 # Run the tool
-uv run python -m pyairfocusexporter export --help
+uv run pyairfocusexporter export --help
 ```
 
 ### Testing Strategy:
@@ -273,10 +267,8 @@ uv run python -m pyairfocusexporter export --help
 4. **Configuration Errors**: Clear error messages for missing/invalid config
 
 ### Retry Logic:
-- Exponential backoff with jitter: `delay = base_delay * (2 ** attempt) + random_jitter`
+- Exponential backoff: `delay = base_delay * (2 ** attempt)`
 - Maximum 3 retries for transient errors
-- Circuit breaker opens after 5 consecutive failures
-- 60-second recovery timeout before half-open state
 
 ### Logging:
 - Structured JSON logging for production
@@ -287,20 +279,14 @@ uv run python -m pyairfocusexporter export --help
 
 ## 11. Performance Optimizations
 
-### Async Architecture:
-- Parallel fetching of independent workspaces
+### Synchronous Architecture:
+- Sequential fetching of workspaces
 - Batch operations for exporter (create multiple items in single request)
-- Connection pooling with HTTP/2 support
+- Connection pooling with httpx
 
 ### Memory Management:
-- Streaming processing for large datasets
+- Clear resource cleanup
 - Generator patterns for item iteration
-- Clear resource cleanup in `__aexit__` methods
-
-### Caching:
-- Request-level caching with TTL
-- Item ID mapping cache for exporter
-- Workspace hierarchy cache for recursive traversal
 
 ## 12. Future Extensibility
 
@@ -353,6 +339,8 @@ uv run python -m pyairfocusexporter export --help
 ## Appendix A: Rate Limiting Implementation
 
 ```python
+import time
+
 class TokenBucketRateLimiter:
     def __init__(self, capacity: int, refill_rate: float):
         self.capacity = capacity
@@ -360,14 +348,14 @@ class TokenBucketRateLimiter:
         self.refill_rate = refill_rate  # tokens per second
         self.last_refill = time.time()
     
-    async def acquire(self, tokens: int = 1):
-        await self._refill()
+    def acquire(self, tokens: int = 1):
+        self._refill()
         while self.tokens < tokens:
-            await asyncio.sleep(0.1)
-            await self._refill()
+            time.sleep(0.1)
+            self._refill()
         self.tokens -= tokens
     
-    async def _refill(self):
+    def _refill(self):
         now = time.time()
         elapsed = now - self.last_refill
         new_tokens = elapsed * self.refill_rate
@@ -375,65 +363,8 @@ class TokenBucketRateLimiter:
         self.last_refill = now
 ```
 
-## Appendix B: Circuit Breaker Pattern
-
-```python
-class CircuitBreaker:
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
-        self.failures = 0
-        self.state = "CLOSED"
-        self.last_failure_time = None
-    
-    async def execute(self, coro):
-        if self.state == "OPEN":
-            if time.time() - self.last_failure_time > self.recovery_timeout:
-                self.state = "HALF_OPEN"
-            else:
-                raise CircuitBreakerOpenError()
-        
-        try:
-            result = await coro
-            if self.state == "HALF_OPEN":
-                self.state = "CLOSED"
-                self.failures = 0
-            return result
-        except Exception as e:
-            self.failures += 1
-            self.last_failure_time = time.time()
-            if self.failures >= self.failure_threshold:
-                self.state = "OPEN"
-            raise
-```
-
-## Appendix C: Progress Tracking
-
-```python
-class ExportProgress:
-    def __init__(self, total_items: int):
-        self.progress = Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            console=console
-        )
-        self.task = self.progress.add_task("[cyan]Exporting...", total=total_items)
-    
-    def update(self, increment: int = 1):
-        self.progress.update(self.task, advance=increment)
-    
-    def __enter__(self):
-        self.progress.start()
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.progress.stop()
-```
-
 ---
 
 *Last Updated: March 10, 2026*  
-*Version: 2.0*  
-*Status: Ready for Implementation Review*
+*Version: 2.1*  
+*Status: Ready for Implementation*

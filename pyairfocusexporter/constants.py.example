@@ -1,0 +1,18 @@
+# Airfocus API Configuration
+AIRFOCUS_API_KEY = "your_airfocus_api_key_here"
+AIRFOCUS_API_BASE_URL = "https://api.airfocus.com/api/v0"
+
+# Miro Configuration
+MIRO_ACCESS_TOKEN = "your_miro_access_token_here"
+MIRO_API_BASE_URL = "https://api.miro.com/v2"
+
+# Rate Limiting Configuration
+AIRFOCUS_RATE_LIMIT_REQUESTS = 600
+AIRFOCUS_RATE_LIMIT_WINDOW = 60
+MIRO_RATE_LIMIT_REQUESTS = 100
+MIRO_RATE_LIMIT_WINDOW = 60
+
+# Request Configuration
+REQUEST_TIMEOUT = 30.0
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0
