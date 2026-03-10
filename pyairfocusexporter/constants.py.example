@@ -2,6 +2,9 @@
 AIRFOCUS_API_KEY = "your_airfocus_api_key_here"
 AIRFOCUS_API_BASE_URL = "https://app.airfocus.com"
 
+# Workspace Configuration
+AIRFOCUS_WORKSPACE_ID = "your_workspace_id_here"
+
 # Miro Configuration
 MIRO_ACCESS_TOKEN = "your_miro_access_token_here"
 MIRO_API_BASE_URL = "https://api.miro.com/v2"

@@ -57,6 +57,30 @@ class AirfocusFetcher:
         self.rate_limiter.update_from_headers(int(remaining) if remaining else None, reset_float)
         return response
 
+    def _fetch_items(self, workspace_id: str) -> list[dict[str, Any]]:
+        items = []
+        offset = 0
+        limit = 1000
+
+        while True:
+            response = self._request(
+                "POST",
+                f"/api/workspaces/{workspace_id}/items/search",
+                params={"offset": offset, "limit": limit},
+                json={},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            items_page = data.get("data", [])
+            items.extend(items_page)
+
+            if len(items_page) < limit:
+                break
+            offset += limit
+
+        return items
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
     def fetch_workspace(
         self,
@@ -78,12 +102,12 @@ class AirfocusFetcher:
             metadata=data.get("metadata", {}),
         )
 
-        items = data.get("_embedded", {}).get("items", [])
-        for item_data in items:
+        items_data = self._fetch_items(workspace_id)
+        for item_data in items_data:
             workspace.items.append(self._parse_item(item_data))
 
         if max_depth is None or depth < max_depth:
-            child_workspaces = data.get("_embedded", {}).get("childWorkspaces", [])
+            child_workspaces = data.get("_embedded", {}).get("children", [])
             for child_data in child_workspaces:
                 child_id = child_data.get("id")
                 if child_id:
@@ -97,9 +121,9 @@ class AirfocusFetcher:
     def _parse_item(self, data: dict[str, Any]) -> ItemData:
         return ItemData(
             id=data.get("id", ""),
-            title=data.get("title", ""),
+            title=data.get("name", ""),
             description=data.get("description"),
-            type=data.get("type", "item"),
+            type=data.get("typeId", "item"),
             status=data.get("status"),
             priority=data.get("priority"),
             tags=data.get("tags", []),

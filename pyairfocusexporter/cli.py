@@ -22,8 +22,8 @@ def cli(ctx: click.Context) -> None:
 @cli.command()
 @click.option(
     "--workspace-id",
-    required=True,
-    help="The ID of the airfocus workspace to extract",
+    default=None,
+    help="The ID of the airfocus workspace to extract (or set in constants.py)",
 )
 @click.option(
     "--target",
@@ -63,7 +63,7 @@ def cli(ctx: click.Context) -> None:
     help="Increase verbosity",
 )
 def export(
-    workspace_id: str,
+    workspace_id: Optional[str],
     target: str,
     dry_run: bool,
     ignore_ssl: bool,
@@ -73,6 +73,14 @@ def export(
     verbose: int,
 ) -> None:
     """Export workspace to target service."""
+    workspace_id = workspace_id or constants.AIRFOCUS_WORKSPACE_ID
+    if not workspace_id:
+        console.print("[red]Error: WORKSPACE_ID not configured[/red]")
+        console.print(
+            "[yellow]Please set --workspace-id or configure AIRFOCUS_WORKSPACE_ID in constants.py[/yellow]"
+        )
+        raise click.Abort()
+
     if verbose > 0:
         console.print(f"[dim]Starting export for workspace: {workspace_id}[/dim]")
 

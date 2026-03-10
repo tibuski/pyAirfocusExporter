@@ -32,7 +32,7 @@ pyairfocusexporter export \
 ```
 
 ### Command-line Arguments:
-- `--workspace-id` (required): The ID of the airfocus workspace to extract
+- `--workspace-id` (optional): The ID of the airfocus workspace to extract (or set in constants.py)
 - `--target` (required): Destination service (initially only `miro` is supported)
 - `--miro-board-id` (required for miro): Miro board ID to export to
 - `--dry-run`: Fetch data without pushing to the target service
@@ -63,6 +63,9 @@ pyairfocusexporter export \
 # Airfocus API Configuration
 AIRFOCUS_API_KEY = "your_airfocus_api_key_here"
 AIRFOCUS_API_BASE_URL = "https://app.airfocus.com"
+
+# Workspace Configuration
+AIRFOCUS_WORKSPACE_ID = "your_workspace_id_here"
 
 # Miro Configuration
 MIRO_ACCESS_TOKEN = "your_miro_access_token_here"
